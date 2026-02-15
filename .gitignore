@@ -1,0 +1,20 @@
+# Build
+build/
+*.class
+SimplePacker.jar
+stub.dex
+stub.zip
+
+# Packer temp
+tmp_pack/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+
+checkdependencies.sh
+install-android-sdk.sh

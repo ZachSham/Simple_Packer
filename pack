@@ -1,0 +1,40 @@
+#!/bin/bash
+# Usage: ./pack myapp.apk [output.apk]
+
+if [ $# -eq 0 ]; then
+    echo "Usage: ./pack <input.apk> [output.apk]"
+    exit 1
+fi
+
+INPUT="$1"
+OUTPUT="${2:-${INPUT%.apk}_packed.apk}"
+
+# Check files exist
+if [ ! -f "$INPUT" ]; then
+    echo "Error: $INPUT not found"
+    exit 1
+fi
+
+if [ ! -f "SimplePacker.jar" ]; then
+    echo "Error: Run ./build.sh first"
+    exit 1
+fi
+
+if [ ! -f "stub.dex" ]; then
+    echo "Error: stub.dex not found. Run ./build.sh first"
+    exit 1
+fi
+
+# Pack
+java -jar SimplePacker.jar "$INPUT" "$OUTPUT"
+
+# Auto-sign with debug keystore if present
+if [ -f ~/.android/debug.keystore ]; then
+    APKSIGNER=$(find "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools" -name "apksigner" -type f 2>/dev/null | head -n 1)
+    if [ -n "$APKSIGNER" ]; then
+        echo "[*] Signing..."
+        "$APKSIGNER" sign --ks ~/.android/debug.keystore --ks-pass pass:android "$OUTPUT" 2>/dev/null && echo "[+] Signed: $OUTPUT"
+    fi
+fi
+
+echo "[+] Done: $OUTPUT"
