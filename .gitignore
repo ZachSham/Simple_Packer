@@ -18,3 +18,18 @@ tmp_pack/
 
 checkdependencies.sh
 install-android-sdk.sh
+
+ui_test.apk.idsig
+
+
+emulator_packertest.apk
+emulator_packertest.apk.idsig
+
+packed_test.apk
+packed_test.apk.idsig
+
+
+tmp_debug/
+tmp_debug2/
+
+ui_test_app/
