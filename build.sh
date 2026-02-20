@@ -31,7 +31,8 @@ fi
 javac -source 1.8 -target 1.8 \
     -bootclasspath "$PLATFORM_JAR" \
     -d build \
-    src/com/packer/StubApplication.java
+    src/com/packer/StubApplication.java \
+    src/com/packer/LaunchActivity.java
 
 # Convert to DEX (d8 or dx)
 D8=$(find "$ANDROID_HOME/build-tools" -name "d8" -type f 2>/dev/null | head -n 1)
@@ -39,9 +40,9 @@ DX=$(find "$ANDROID_HOME/build-tools" -name "dx" -type f 2>/dev/null | head -n 1
 
 cd build
 if [ -n "$D8" ]; then
-    "$D8" --output ../stub.zip com/packer/StubApplication.class
+    "$D8" --output ../stub.zip com/packer/StubApplication.class com/packer/LaunchActivity.class
 elif [ -n "$DX" ]; then
-    "$DX" --dex --output=../stub.dex com/packer/StubApplication.class
+    "$DX" --dex --output=../stub.dex com/packer/StubApplication.class com/packer/LaunchActivity.class
     cd ..
     rm -rf build
     echo "[+] Done! Run: ./pack <input.apk> [output.apk]"
@@ -54,12 +55,16 @@ cd ..
 
 # d8 outputs a zip; extract and rename to stub.dex
 unzip -o -q stub.zip 2>/dev/null
-DEX=$(find . -maxdepth 2 -name "*.dex" -type f 2>/dev/null | head -n 1)
-if [ -n "$DEX" ]; then
-    mv "$DEX" stub.dex
+if [ -f "classes.dex" ]; then
+    mv -f "classes.dex" stub.dex
 else
-    echo "[!] No .dex in stub.zip"
-    exit 1
+    DEX=$(find . -maxdepth 2 -name "*.dex" -type f 2>/dev/null | head -n 1)
+    if [ -n "$DEX" ]; then
+        mv -f "$DEX" stub.dex
+    else
+        echo "[!] No .dex in stub.zip"
+        exit 1
+    fi
 fi
 rm -f stub.zip
 rm -rf build com META-INF 2>/dev/null
