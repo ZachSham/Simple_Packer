@@ -6,10 +6,7 @@ import android.os.Bundle;
 
 import java.io.InputStream;
 
-/**
- * Launcher activity that exists in stub.dex so the app can start,
- * then hands off to the original launcher activity stored in assets/entry.txt.
- */
+// Launcher activity that hands off to the real app
 public class LaunchActivity extends Activity {
 
     @Override
@@ -17,15 +14,16 @@ public class LaunchActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         try {
-            // Make payload classes visible to the app classloader before launching the real entry activity.
-            StubApplication.ensureInstalled(getBaseContext());
+            
+            // Decrypts the dex file and loads it into the class loader
+            StubApplication.loadDex(getBaseContext());
 
             String entry = readAssetText("entry.txt").trim();
             if (entry.isEmpty()) {
                 throw new RuntimeException("entry.txt is empty");
             }
 
-            // Normalize ".MainActivity" " into a full class name 
+            // Normalize .MainActivity into a full class name 
             String fqcn = entry;
             if (fqcn.startsWith(".")) {
                 fqcn = getPackageName() + fqcn;
@@ -39,6 +37,8 @@ public class LaunchActivity extends Activity {
 
             Intent i = new Intent();
             i.setClassName(this, fqcn);
+
+            // start the real app activity now that it is setup
             startActivity(i);
             finish();
         } catch (Exception e) {

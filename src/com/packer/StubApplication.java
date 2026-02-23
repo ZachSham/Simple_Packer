@@ -21,7 +21,7 @@ public class StubApplication extends Application {
         super.attachBaseContext(base);
 
         try {
-            ClassLoader newLoader = ensureInstalled(base);
+            ClassLoader newLoader = loadDex(base);
 
             // Read real app class name saved by packer (may be default android.app.Application)
             InputStream nameStream = base.getAssets().open("app.txt");
@@ -29,6 +29,7 @@ public class StubApplication extends Application {
             nameStream.read(nameBytes);
             nameStream.close();
             String realAppClassName = new String(nameBytes).trim();
+            // if the real app class name is not the default android.app.Application, load the class and instantiate it
             if (!"android.app.Application".equals(realAppClassName) && !realAppClassName.isEmpty()) {
                 Class<?> realAppClass = newLoader.loadClass(realAppClassName);
                 realApp = (Application) realAppClass.newInstance();
@@ -57,10 +58,10 @@ public class StubApplication extends Application {
         if (realApp != null) realApp.onCreate();
     }
 
-    static ClassLoader ensureInstalled(Context base) throws Exception {
+    static ClassLoader loadDex(Context base) throws Exception {
         if (decryptedLoader != null) return decryptedLoader;
 
-        // Read encrypted DEX from assets
+        // Read encrypted DEX from assets 
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         try (InputStream is = base.getAssets().open("p.dat")) {
             byte[] temp = new byte[4096];
@@ -68,11 +69,7 @@ public class StubApplication extends Application {
             while ((n = is.read(temp)) != -1) buffer.write(temp, 0, n);
         }
         byte[] encrypted = buffer.toByteArray();
-
-        byte[] decrypted = new byte[encrypted.length];
-        for (int i = 0; i < encrypted.length; i++) {
-            decrypted[i] = (byte) (encrypted[i] ^ KEY);
-        }
+        byte[] decrypted = decrypt(encrypted);
 
         if (decrypted.length < 4 || decrypted[0] != 'd' || decrypted[1] != 'e' || decrypted[2] != 'x') {
             throw new RuntimeException("DEX magic check failed");
@@ -88,9 +85,19 @@ public class StubApplication extends Application {
         Object loadedApk = packageInfoField.get(base);
         Field classLoaderField = loadedApk.getClass().getDeclaredField("mClassLoader");
         classLoaderField.setAccessible(true);
+        // swap the original class loader with the new one to load the real apps classes
         classLoaderField.set(loadedApk, newLoader);
 
         decryptedLoader = newLoader;
+
         return newLoader;
+    }
+
+    private static byte[] decrypt(byte[] encrypted) {
+        byte[] decrypted = new byte[encrypted.length];
+        for (int i = 0; i < encrypted.length; i++) {
+            decrypted[i] = (byte) (encrypted[i] ^ KEY);
+        }
+        return decrypted;
     }
 }

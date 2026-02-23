@@ -5,8 +5,11 @@ import java.nio.file.*;
 import java.util.zip.*;
 
 public class SimplePacker {
-
+   
+   // const key for xoring bytes
     private static final byte KEY = 0x42;
+
+    // temporrary directory for the decoded human readable apk and original apk (binary)
     private static final String TEMP = "tmp_pack";
     private static final String DECODED = "tmp_decode";
 
@@ -19,15 +22,18 @@ public class SimplePacker {
         String input = args[0];
         String output = args[1];
 
-        System.out.println("[*] Packing: " + input);
 
+        // apk tool decodes the whole apk including the manifest, resources,
+        // and bytecode which it turns into smali 
         runCommand("apktool d " + input + " -o " + DECODED + " -f");
-
         String manifestPath = DECODED + "/AndroidManifest.xml";
+        // read the app class and the launchable activity from the manifest
         String realAppClass = readAppClass(manifestPath);
         String realEntryActivity = readLaunchableActivity(manifestPath);
-        patchManifest(manifestPath);
-        patchLauncher(manifestPath);
+
+        // patch the manifest to include both the stub application and launchable activity
+        patchStubApplication(manifestPath);
+        patchLauncherActivity(manifestPath);
 
         runCommand("apktool b " + DECODED + " -o tmp_rebuilt.apk");
 
@@ -50,8 +56,6 @@ public class SimplePacker {
         deleteDir(new File(DECODED));
         new File("tmp_rebuilt.apk").delete();
 
-        System.out.println("[+] Created: " + output);
-        System.out.println("[!] Sign with: apksigner sign --ks ~/.android/debug.keystore " + output);
     }
 
     static String readAppClass(String manifestPath) throws Exception {
@@ -68,23 +72,24 @@ public class SimplePacker {
         return appTag.substring(start, end);
     }
 
-    static void patchManifest(String manifestPath) throws Exception {
-        String content = new String(Files.readAllBytes(Paths.get(manifestPath)));
-        int appIndex = content.indexOf("<application");
-        if (appIndex == -1) throw new RuntimeException("No <application> tag found");
-        int appTagEnd = content.indexOf(">", appIndex);
-        if (appTagEnd == -1) throw new RuntimeException("Malformed <application> tag");
-        String appTag = content.substring(appIndex, appTagEnd + 1);
-        int nameIndex = appTag.indexOf("android:name=\"");
-        if (nameIndex == -1) {
-            content = content.replace("<application", "<application android:name=\"com.packer.StubApplication\"");
-        } else {
-            int start = appIndex + nameIndex + "android:name=\"".length();
-            int end = content.indexOf("\"", start);
-            content = content.substring(0, start) + "com.packer.StubApplication" + content.substring(end);
-        }
-        Files.write(Paths.get(manifestPath), content.getBytes());
+    static void patchStubApplication(String manifestPath) throws Exception {
+    String content = new String(Files.readAllBytes(Paths.get(manifestPath)));
+    int appIndex = content.indexOf("<application");
+
+    // looks for the application tag to find the entry point and replace it with the stub for the unpacking process
+    if (appIndex == -1) throw new RuntimeException("No <application> tag found");
+    int appTagEnd = content.indexOf(">", appIndex);
+    if (appTagEnd == -1) throw new RuntimeException("Malformed <application> tag");
+
+    String appTag = content.substring(appIndex, appTagEnd + 1);
+    String patchedTag = appTag.replaceAll("android:name=\"[^\"]*\"", "");
+    patchedTag = patchedTag.replace("<application", "<application android:name=\"com.packer.StubApplication\"");
+    content = content.substring(0, appIndex) + patchedTag + content.substring(appTagEnd + 1);
+
+    Files.write(Paths.get(manifestPath), content.getBytes());
+
     }
+
 
     static String readLaunchableActivity(String manifestPath) throws Exception {
         String content = new String(Files.readAllBytes(Paths.get(manifestPath)));
@@ -107,7 +112,7 @@ public class SimplePacker {
         return activityTag.substring(start, end);
     }
 
-    static void patchLauncher(String manifestPath) throws Exception {
+    static void patchLauncherActivity(String manifestPath) throws Exception {
         String content = new String(Files.readAllBytes(Paths.get(manifestPath)));
 
         // 1) Disable the original launcher intent-filter so only the stub shows up in the launcher.
@@ -122,12 +127,13 @@ public class SimplePacker {
             content = content.substring(0, intentFilterStart) + content.substring(intentFilterEnd);
         }
 
-        // 2) Insert a stub launcher activity that exists in stub.dex.
+        // error checking before adding launch activity to manifest
         int appIndex = content.indexOf("<application");
         if (appIndex == -1) throw new RuntimeException("No <application> tag found");
         int appTagEnd = content.indexOf(">", appIndex);
         if (appTagEnd == -1) throw new RuntimeException("Malformed <application> tag");
 
+        // launcher activity that gets appended to the manifest document in binary
         String stubLauncher =
             "\n        <activity android:name=\"com.packer.LaunchActivity\" android:exported=\"true\">\n" +
             "            <intent-filter>\n" +
