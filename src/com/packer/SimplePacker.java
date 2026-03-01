@@ -213,7 +213,7 @@ public class SimplePacker {
             } else {
                 String path = file.getPath().substring(base.length() + 1).replace(File.separatorChar, '/');
                 ZipEntry entry = new ZipEntry(path);
-                if (path.equals("resources.arsc")) {
+                if (path.equals("resources.arsc") || (path.startsWith("lib/") && path.endsWith(".so"))) {
                     entry.setMethod(ZipEntry.STORED);
                     entry.setSize(file.length());
                     entry.setCompressedSize(file.length());
