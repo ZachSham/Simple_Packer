@@ -31,6 +31,17 @@ java -jar SimplePacker.jar "$INPUT" "$OUTPUT"
 # Auto-sign with debug keystore if present
 if [ -f ~/.android/debug.keystore ]; then
     APKSIGNER=$(find "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools" -name "apksigner" -type f 2>/dev/null | head -n 1)
+    ZIPALIGN=$(find "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools" -name "zipalign" -type f 2>/dev/null | head -n 1)
+
+    # Zipalign with 4096-byte alignment for extractNativeLibs=false
+    if [ -n "$ZIPALIGN" ]; then
+        ALIGNED="${OUTPUT%.apk}_aligned.apk"
+        echo "[*] Aligning..."
+        "$ZIPALIGN" -p 4096 "$OUTPUT" "$ALIGNED" && mv "$ALIGNED" "$OUTPUT"
+    else
+        echo "[!] zipalign not found, skipping alignment"
+    fi
+
     if [ -n "$APKSIGNER" ]; then
         echo "[*] Signing..."
         "$APKSIGNER" sign --ks ~/.android/debug.keystore --ks-pass pass:android "$OUTPUT" 2>/dev/null && echo "[+] Signed: $OUTPUT"
